@@ -1,20 +1,21 @@
 use ggez;
 
+#[allow(unused_imports)]
 use ggez::event::{KeyCode, KeyMods};
 use ggez::{event, graphics, Context, GameResult};
 
-use std::f64::consts::PI;
-use std::f64;
+use std::f32::consts::PI;
+use std::f32;
 
 
 const FPS: u32 = 60;
 const SCREEN_SIZE: (f32, f32) = (800.0, 600.0);
 
-const CAR_ACCELERATION: f64 = 200.0;
-const CAR_MAX_SPEED: f64 = 300.0;
-const CAR_STEER_LIMIT: f64 = 1.0 / 65.0;
-const CAR_STEER_SPEED: f64 = CAR_STEER_LIMIT * 3.0;
-const CAR_BRAKES_ACCELERATION: f64 = 500.0;
+const CAR_ACCELERATION: f32 = 200.0;
+const CAR_MAX_SPEED: f32 = 100.0; //good is 300.0
+const CAR_STEER_LIMIT: f32 = 1.0 / 65.0;
+const CAR_STEER_SPEED: f32 = CAR_STEER_LIMIT * 3.0;
+const CAR_BRAKES_ACCELERATION: f32 = 500.0;
 
 
 // ======================================================================
@@ -24,12 +25,12 @@ enum Steering { Right, Left, Forward }
 
 struct Car {
     // state
-    pos: (f64, f64), // Coordinates of the car
-    rot: f64,        // Rotation (in radians)
-    speed: f64,      // Speed (pixels/second)
-    wheels: f64,     // How much car turns when moves one pixel
+    pos: (f32, f32), // Coordinates of the car
+    rot: f32,        // Rotation (in radians)
+    speed: f32,      // Speed (pixels/second)
+    wheels: f32,     // How much car turns when moves one pixel
     // controls
-    acc: f64,        // Acceleration (pixels/second^2)
+    acc: f32,        // Acceleration (pixels/second^2)
     brakes: bool,    // Are brakes active
     steer: Steering, // Steering wheel state (enum)
     fast_steer: bool // If ture, wheels steer immidiately
@@ -37,14 +38,14 @@ struct Car {
 
 
 impl Car {
-    fn new(coords: (f64, f64)) -> Self {
+    fn new(coords: (f32, f32)) -> Self {
         Car {
             pos:   coords,
             rot:   0.0,
             speed: 0.0, acc: 0.0,
             wheels: 0.0, brakes: false,
             steer: Steering::Forward,
-            fast_steer: false
+            fast_steer: true
         }
     }
 
@@ -74,8 +75,9 @@ impl Car {
         }
 
         // update positions
-        let frame_speed = self.speed / FPS as f64;
-        self.rot +=   frame_speed * self.wheels; 
+        let frame_speed = self.speed / FPS as f32;
+        self.rot +=   frame_speed * self.wheels;
+        if self.rot.abs() > PI { self.rot -= self.rot.signum()*PI*2.0 }
         self.pos.0 += frame_speed * self.rot.cos();
         self.pos.1 += frame_speed * self.rot.sin();
         Ok(())
@@ -89,18 +91,22 @@ impl Car {
                 [0.0, 0.0, 0.0, 1.0].into(),
             )?;
         let draw_params = graphics::DrawParam::new()
-                .dest([self.pos.0 as f32, self.pos.1 as f32])
-                .rotation(self.rot as f32);
+                .dest([self.pos.0, self.pos.1])
+                .rotation(self.rot);
 
         graphics::draw(ctx, &rectangle, draw_params)?;
+        /*graphics::draw(ctx, 
+            &graphics::Text::new(format!("{}", (self.rot%PI)*180.0/PI)),
+            graphics::DrawParam::new().dest([self.pos.0+20.0, self.pos.1-20.0]))?; */
+
         Ok(())
     }
 }
 
 /// Step-by-step lowers value with given speed per second to zero.
-fn approach_zero(value: &mut f64, speed: &f64) {
+fn approach_zero(value: &mut f32, speed: &f32) {
     if *value == 0.0 { return; }
-    let frame_speed = speed * value.signum() / FPS as f64;
+    let frame_speed = speed * value.signum() / FPS as f32;
     if (*value - frame_speed) * value.signum() > 0.0 {
         *value -= frame_speed;
     } else {
@@ -109,23 +115,54 @@ fn approach_zero(value: &mut f64, speed: &f64) {
 }
 
 /// Step by step inc's the value until it reaches max.
-fn approach_max(value: &mut f64, speed: &f64, max: &f64) {
+fn approach_max(value: &mut f32, speed: &f32, max: &f32) {
     if value.abs() == *max { return; }
-    *value += *speed / FPS as f64;
+    *value += *speed / FPS as f32;
     if value.abs() > *max {
         *value = max * value.signum();
     }
 
 }
 
+// ======================================================================
+
+struct Autopilot {
+    car: Car,
+    waypoint: (f32, f32)
+}
+
+impl Autopilot {
+    fn update(&mut self) -> GameResult {
+        self.car.acc = CAR_ACCELERATION;
+        let dx = self.waypoint.0 - self.car.pos.0;
+        let dy = self.waypoint.1 - self.car.pos.1;
+        let mut differance = dy.atan2(dx) - self.car.rot;
+        // FUN: If following line is removed, behaves strange on overlap
+        if differance.abs() > PI { differance -= PI * 2.0 * differance.signum() }
+        if differance.abs() <= PI / 60.0 {
+            self.car.steer = Steering::Forward;
+        } else if differance > 0.0 {
+            self.car.steer = Steering::Right;
+        } else {
+            self.car.steer = Steering::Left;
+        }
+        Ok(())
+    }
+
+}
+
+// ======================================================================
+
 struct State {
-    player: Car
+    /* player: Car, */
+    autopilot: Autopilot
 }
 
 impl ggez::event::EventHandler for State {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         while ggez::timer::check_update_time(ctx, FPS) {
-            self.player.update()?;
+            self.autopilot.update()?;
+            self.autopilot.car.update()?;
         }
         Ok(())
     }
@@ -133,12 +170,20 @@ impl ggez::event::EventHandler for State {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, [0.6, 0.6, 0.6, 0.6].into());
 
-        self.player.draw(ctx)?;
+        self.autopilot.car.draw(ctx)?;
+        //draw waypoint
+        let circle = graphics::Mesh::new_circle(
+            ctx, graphics::DrawMode::stroke(1.0), 
+            [self.autopilot.waypoint.0 as f32, self.autopilot.waypoint.1 as f32],
+            10.0, 100.0, (0, 0, 0).into()
+        )?;
+        graphics::draw(ctx, &circle, graphics::DrawParam::new())?;
 
         graphics::present(ctx)?;
         ggez::timer::yield_now();
         Ok(())
     }
+    /*
     fn key_down_event( &mut self, ctx: &mut Context, keycode: KeyCode, _keymod: KeyMods, _repeat: bool) {
         match keycode {
             KeyCode::W => { self.player.acc =  CAR_ACCELERATION; }
@@ -162,6 +207,7 @@ impl ggez::event::EventHandler for State {
             _ => (), // aDo nothing
         }
     }
+    */
 
 }
 
@@ -172,7 +218,8 @@ fn main() -> GameResult{
         .build()?;
 
     // state initialisation
-    let mut state = State { player: Car::new((100.0, 100.0)) };
+    let autopilot = Autopilot { waypoint: (100.0, 200.0), car: Car::new((400.0, 500.0)) };
+    let mut state = State { autopilot: autopilot };
     event::run(ctx, events_loop, &mut state)
 }
 
