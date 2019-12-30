@@ -33,7 +33,7 @@ struct Car {
     acc: f32,        // Acceleration (pixels/second^2)
     brakes: bool,    // Are brakes active
     steer: Steering, // Steering wheel state (enum)
-    fast_steer: bool // If ture, wheels steer immidiately
+    soft_steer: bool // If ture, wheels steer immidiately
 }
 
 
@@ -45,7 +45,7 @@ impl Car {
             speed: 0.0, acc: 0.0,
             wheels: 0.0, brakes: false,
             steer: Steering::Forward,
-            fast_steer: true
+            soft_steer: true
         }
     }
 
@@ -57,7 +57,7 @@ impl Car {
             approach_zero(&mut self.speed, &CAR_BRAKES_ACCELERATION);
         }
         // update wheels
-        if !self.fast_steer {
+        if self.soft_steer {
             match self.steer {
                 Steering::Forward => 
                     approach_zero(&mut self.wheels, &CAR_STEER_SPEED),
