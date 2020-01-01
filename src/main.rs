@@ -3,6 +3,7 @@ use ggez;
 #[allow(unused_imports)]
 use ggez::event::{KeyCode, KeyMods};
 use ggez::{event, graphics, Context, GameResult};
+use ggez::input::mouse;
 
 use std::f32::consts::PI;
 use std::f32;
@@ -33,7 +34,6 @@ struct Car {
     acc: f32,        // Acceleration (pixels/second^2)
     brakes: bool,    // Are brakes active
     steer: Steering, // Steering wheel state (enum)
-    soft_steer: bool // If ture, wheels steer immidiately
 }
 
 
@@ -45,7 +45,6 @@ impl Car {
             speed: 0.0, acc: 0.0,
             wheels: 0.0, brakes: false,
             steer: Steering::Forward,
-            soft_steer: true
         }
     }
 
@@ -57,21 +56,13 @@ impl Car {
             approach_zero(&mut self.speed, &CAR_BRAKES_ACCELERATION);
         }
         // update wheels
-        if self.soft_steer {
-            match self.steer {
-                Steering::Forward => 
-                    approach_zero(&mut self.wheels, &CAR_STEER_SPEED),
-                Steering::Right   => 
-                    approach_max( &mut self.wheels, &CAR_STEER_SPEED, &CAR_STEER_LIMIT),
-                Steering::Left    =>
-                    approach_max( &mut self.wheels,&-CAR_STEER_SPEED, &CAR_STEER_LIMIT)
-            }
-        } else {
-            match self.steer {
-                Steering::Forward => self.wheels =  0.0,
-                Steering::Right   => self.wheels =  CAR_STEER_LIMIT,
-                Steering::Left    => self.wheels = -CAR_STEER_LIMIT
-            }
+        match self.steer {
+            Steering::Forward => 
+                approach_zero(&mut self.wheels, &CAR_STEER_SPEED),
+            Steering::Right   => 
+                approach_max( &mut self.wheels, &CAR_STEER_SPEED, &CAR_STEER_LIMIT),
+            Steering::Left    =>
+                approach_max( &mut self.wheels,&-CAR_STEER_SPEED, &CAR_STEER_LIMIT)
         }
 
         // update positions
@@ -116,7 +107,7 @@ fn approach_zero(value: &mut f32, speed: &f32) {
 
 /// Step by step inc's the value until it reaches max.
 fn approach_max(value: &mut f32, speed: &f32, max: &f32) {
-    if value.abs() == *max { return; }
+    if *value * speed.signum() == *max { return; }
     *value += *speed / FPS as f32;
     if value.abs() > *max {
         *value = max * value.signum();
@@ -136,10 +127,12 @@ impl Autopilot {
         self.car.acc = CAR_ACCELERATION;
         let dx = self.waypoint.0 - self.car.pos.0;
         let dy = self.waypoint.1 - self.car.pos.1;
-        let mut differance = dy.atan2(dx) - self.car.rot;
-        // FUN: If following line is removed, behaves strange on overlap
+        let add_turn = self.car.wheels.powi(2) * self.car.speed / (CAR_STEER_SPEED * 2.0);
+
+        let mut differance = dy.atan2(dx) - self.car.rot - add_turn;
         if differance.abs() > PI { differance -= PI * 2.0 * differance.signum() }
-        if differance.abs() <= PI / 60.0 {
+
+        if differance.abs() <= PI / 180.0 {
             self.car.steer = Steering::Forward;
         } else if differance > 0.0 {
             self.car.steer = Steering::Right;
@@ -182,6 +175,9 @@ impl ggez::event::EventHandler for State {
         graphics::present(ctx)?;
         ggez::timer::yield_now();
         Ok(())
+    }
+    fn mouse_button_down_event( &mut self, _ctx: &mut Context, _button: mouse::MouseButton, x: f32, y: f32) {
+        self.autopilot.waypoint = (x, y);
     }
     /*
     fn key_down_event( &mut self, ctx: &mut Context, keycode: KeyCode, _keymod: KeyMods, _repeat: bool) {
