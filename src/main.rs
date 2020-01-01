@@ -127,7 +127,7 @@ impl Autopilot {
         self.car.acc = CAR_ACCELERATION;
         let dx = self.waypoint.0 - self.car.pos.0;
         let dy = self.waypoint.1 - self.car.pos.1;
-        let add_turn = self.car.wheels.powi(2) * self.car.speed / (CAR_STEER_SPEED * 2.0);
+        let add_turn = self.car.wheels * self.car.wheels.abs() * self.car.speed / (CAR_STEER_SPEED * 2.0);
 
         let mut differance = dy.atan2(dx) - self.car.rot - add_turn;
         if differance.abs() > PI { differance -= PI * 2.0 * differance.signum() }
