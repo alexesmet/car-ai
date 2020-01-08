@@ -7,15 +7,17 @@ use ggez::input::mouse;
 
 use std::f32::consts::PI;
 use std::f32;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 
 const FPS: u32 = 60;
 const SCREEN_SIZE: (f32, f32) = (800.0, 600.0);
 
 const CAR_ACCELERATION: f32 = 200.0;
-const CAR_MAX_SPEED: f32 = 100.0; //good is 300.0
+const CAR_MAX_SPEED: f32 = 300.0; //good is 300.0
 const CAR_STEER_LIMIT: f32 = 1.0 / 65.0;
-const CAR_STEER_SPEED: f32 = CAR_STEER_LIMIT * 3.0;
+const CAR_STEER_SPEED: f32 = CAR_STEER_LIMIT ;
 const CAR_BRAKES_ACCELERATION: f32 = 500.0;
 
 
@@ -119,14 +121,19 @@ fn approach_max(value: &mut f32, speed: &f32, max: &f32) {
 
 struct Autopilot {
     car: Car,
-    waypoint: (f32, f32)
+    waypoint: Rc<Waypoint>
 }
 
 impl Autopilot {
     fn update(&mut self) -> GameResult {
         self.car.acc = CAR_ACCELERATION;
-        let dx = self.waypoint.0 - self.car.pos.0;
-        let dy = self.waypoint.1 - self.car.pos.1;
+        let dx = self.waypoint.coords.0 - self.car.pos.0;
+        let dy = self.waypoint.coords.1 - self.car.pos.1;
+        if dx.hypot(dy) < 20.0 {
+            let temp = Rc::clone(&self.waypoint.children.borrow()[0]);
+            self.waypoint = temp;
+        }
+
         let add_turn = self.car.wheels * self.car.wheels.abs() * self.car.speed / (CAR_STEER_SPEED * 2.0);
 
         let mut differance = dy.atan2(dx) - self.car.rot - add_turn;
@@ -143,6 +150,14 @@ impl Autopilot {
     }
 
 }
+
+// ======================================================================
+
+struct Waypoint {
+    coords: RefCell<(f32, f32)>,
+    children: RefCell<Vec<Rc<Waypoint>>>
+}
+
 
 // ======================================================================
 
@@ -164,10 +179,9 @@ impl ggez::event::EventHandler for State {
         graphics::clear(ctx, [0.6, 0.6, 0.6, 0.6].into());
 
         self.autopilot.car.draw(ctx)?;
-        //draw waypoint
         let circle = graphics::Mesh::new_circle(
             ctx, graphics::DrawMode::stroke(1.0), 
-            [self.autopilot.waypoint.0 as f32, self.autopilot.waypoint.1 as f32],
+            [self.autopilot.waypoint.coords.0 as f32, self.autopilot.waypoint.coords.1 as f32],
             10.0, 100.0, (0, 0, 0).into()
         )?;
         graphics::draw(ctx, &circle, graphics::DrawParam::new())?;
@@ -175,11 +189,10 @@ impl ggez::event::EventHandler for State {
         graphics::present(ctx)?;
         ggez::timer::yield_now();
         Ok(())
-    }
+    } /*
     fn mouse_button_down_event( &mut self, _ctx: &mut Context, _button: mouse::MouseButton, x: f32, y: f32) {
-        self.autopilot.waypoint = (x, y);
+        self.autopilot.waypoint.coords = (x, y);
     }
-    /*
     fn key_down_event( &mut self, ctx: &mut Context, keycode: KeyCode, _keymod: KeyMods, _repeat: bool) {
         match keycode {
             KeyCode::W => { self.player.acc =  CAR_ACCELERATION; }
@@ -207,14 +220,27 @@ impl ggez::event::EventHandler for State {
 
 }
 
-fn main() -> GameResult{
+fn main() -> GameResult {
     let (ctx, events_loop) = &mut ggez::ContextBuilder::new("car-city-2", "Alexey Metlitski")
         .window_setup(ggez::conf::WindowSetup::default().title("Drive The Car !"))
         .window_mode(ggez::conf::WindowMode::default().dimensions(SCREEN_SIZE.0, SCREEN_SIZE.1))
         .build()?;
 
     // state initialisation
-    let autopilot = Autopilot { waypoint: (100.0, 200.0), car: Car::new((400.0, 500.0)) };
+    let waypoint1 = Rc::new( Waypoint {
+        coords: (100.0, 200.0),
+        children: RefCell::new(vec![])
+    } );
+    let waypoint3 = Rc::new( Waypoint {
+        coords: (600.0, 100.0),
+        children: RefCell::new(vec![Rc::clone(&waypoint1)])
+    } );
+    let waypoint2 = Rc::new( Waypoint {
+        coords: (600.0, 400.0),
+        children: RefCell::new(vec![Rc::clone(&waypoint3)])
+    } );
+    waypoint1.children.borrow_mut().push(Rc::clone(&waypoint2));
+    let autopilot = Autopilot { waypoint: Rc::clone(&waypoint1), car: Car::new((400.0, 500.0)) };
     let mut state = State { autopilot: autopilot };
     event::run(ctx, events_loop, &mut state)
 }
