@@ -10,3 +10,5 @@ edition = "2018"
 cgmath = "0.17.0"
 ggez = "0.5.1"
 rand = "0.7.2"
+toml = "0.5"
+serde = { version = "1.0", features = ["derive"] }

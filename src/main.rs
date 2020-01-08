@@ -10,6 +10,8 @@ use std::f32;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+mod waypoints;
+use waypoints::Waypoint;
 
 const FPS: u32 = 60;
 const SCREEN_SIZE: (f32, f32) = (800.0, 600.0);
@@ -153,13 +155,6 @@ impl Autopilot {
 
 // ======================================================================
 
-struct Waypoint {
-    coords: (f32, f32),
-    children: RefCell<Vec<Rc<Waypoint>>>
-}
-
-
-// ======================================================================
 
 struct State {
     /* player: Car, */
