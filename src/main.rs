@@ -154,7 +154,7 @@ impl Autopilot {
 // ======================================================================
 
 struct Waypoint {
-    coords: RefCell<(f32, f32)>,
+    coords: (f32, f32),
     children: RefCell<Vec<Rc<Waypoint>>>
 }
 
