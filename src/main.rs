@@ -3,12 +3,10 @@ use ggez;
 #[allow(unused_imports)]
 use ggez::event::{KeyCode, KeyMods};
 use ggez::{event, graphics, Context, GameResult};
-use ggez::input::mouse;
 
 use std::f32::consts::PI;
 use std::f32;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 mod waypoints;
 use waypoints::Waypoint;
@@ -17,9 +15,9 @@ const FPS: u32 = 60;
 const SCREEN_SIZE: (f32, f32) = (800.0, 600.0);
 
 const CAR_ACCELERATION: f32 = 200.0;
-const CAR_MAX_SPEED: f32 = 300.0; //good is 300.0
-const CAR_STEER_LIMIT: f32 = 1.0 / 65.0;
-const CAR_STEER_SPEED: f32 = CAR_STEER_LIMIT ;
+const CAR_MAX_SPEED: f32 = 200.0; //good is 300.0
+const CAR_STEER_LIMIT: f32 = 1.0 / 40.0;
+const CAR_STEER_SPEED: f32 = CAR_STEER_LIMIT * 2.0;
 const CAR_BRAKES_ACCELERATION: f32 = 500.0;
 
 
@@ -220,22 +218,10 @@ fn main() -> GameResult {
         .window_setup(ggez::conf::WindowSetup::default().title("Drive The Car !"))
         .window_mode(ggez::conf::WindowMode::default().dimensions(SCREEN_SIZE.0, SCREEN_SIZE.1))
         .build()?;
-
+    // create map
+    let map = waypoints::builder::open_map("res/map1.txt").unwrap();
     // state initialisation
-    let waypoint1 = Rc::new( Waypoint {
-        coords: (100.0, 200.0),
-        children: RefCell::new(vec![])
-    } );
-    let waypoint3 = Rc::new( Waypoint {
-        coords: (600.0, 100.0),
-        children: RefCell::new(vec![Rc::clone(&waypoint1)])
-    } );
-    let waypoint2 = Rc::new( Waypoint {
-        coords: (600.0, 400.0),
-        children: RefCell::new(vec![Rc::clone(&waypoint3)])
-    } );
-    waypoint1.children.borrow_mut().push(Rc::clone(&waypoint2));
-    let autopilot = Autopilot { waypoint: Rc::clone(&waypoint1), car: Car::new((400.0, 500.0)) };
+    let autopilot = Autopilot { waypoint: Rc::clone(&map[0]), car: Car::new((400.0, 500.0)) };
     let mut state = State { autopilot: autopilot };
     event::run(ctx, events_loop, &mut state)
 }
